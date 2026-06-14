@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router';
+import { HashRouter, Routes, Route, Navigate, useNavigate } from 'react-router';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { LandingPage } from './components/LandingPage';
 import { LoginPage } from './components/LoginPage';
@@ -38,7 +38,7 @@ function LandingWrapper() {
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <HashRouter>
       <AuthProvider>
         <Routes>
           <Route path="/" element={<LandingWrapper />} />
@@ -49,6 +49,6 @@ export default function App() {
         </Routes>
         <Toaster />
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   );
 }
