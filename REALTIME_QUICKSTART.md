@@ -118,8 +118,8 @@ src/
 **File**: `.env.local`
 ```
 VITE_SUPABASE_URL=https://mlbgjzibaakelmmmtagw.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_rKAQnYB-m-7jR_kAck_SrA_VV7B3GNs
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_nTbYOZgwzdBpf5KkhPqQPA_dY5mCKQj
+VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 ```
 
 ## Supabase Dashboard Setup

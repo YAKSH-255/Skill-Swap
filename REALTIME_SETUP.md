@@ -4,8 +4,8 @@
 
 Your Supabase credentials have been configured in `.env.local`:
 - **URL**: https://mlbgjzibaakelmmmtagw.supabase.co
-- **Public Key**: sb_publishable_rKAQnYB-m-7jR_kAck_SrA_VV7B3GNs (VITE_SUPABASE_ANON_KEY)
-- **Secret Key**: sb_secret_nTbYOZgwzdBpf5KkhPqQPA_dY5mCKQj (SUPABASE_SERVICE_ROLE_KEY)
+- **Public Key**: your_supabase_anon_key (VITE_SUPABASE_ANON_KEY)
+- **Secret Key**: your_supabase_service_role_key (SUPABASE_SERVICE_ROLE_KEY)
 
 The Supabase client is configured in `src/lib/supabase.ts` with real-time support enabled.
 
