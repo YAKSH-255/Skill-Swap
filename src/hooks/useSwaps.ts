@@ -46,6 +46,23 @@ export function useSwaps(userId: string | undefined) {
 
   const createSwap = async (toUserId: string, offerSkill: string, wantSkill: string, message = '') => {
     if (!userId) return { error: 'Not authenticated' };
+
+    // Prevent self-swap
+    if (toUserId === userId) return { error: 'You cannot swap with yourself.' };
+
+    // Prevent duplicate pending proposals to the same user
+    const { data: existing } = await supabase
+      .from('swap_proposals')
+      .select('id')
+      .eq('from_user_id', userId)
+      .eq('to_user_id', toUserId)
+      .eq('status', 'pending')
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return { error: 'You already have a pending proposal with this user.' };
+    }
+
     const { error } = await supabase.from('swap_proposals').insert({
       from_user_id: userId,
       to_user_id: toUserId,
@@ -64,5 +81,17 @@ export function useSwaps(userId: string | undefined) {
     return { error: error?.message ?? null };
   };
 
-  return { swaps, loading, createSwap, updateSwapStatus, refetch: fetchSwaps };
+  // Sender withdraws their own pending proposal
+  const withdrawSwap = async (swapId: string) => {
+    if (!userId) return { error: 'Not authenticated' };
+    const { error } = await supabase
+      .from('swap_proposals')
+      .update({ status: 'declined', updated_at: new Date().toISOString() })
+      .eq('id', swapId)
+      .eq('from_user_id', userId)
+      .eq('status', 'pending');
+    return { error: error?.message ?? null };
+  };
+
+  return { swaps, loading, createSwap, updateSwapStatus, withdrawSwap, refetch: fetchSwaps };
 }

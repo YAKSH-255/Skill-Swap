@@ -34,7 +34,7 @@ interface SwapsPanelProps {
 
 export function SwapsPanel({ onScheduleSession }: SwapsPanelProps) {
   const { user } = useAuth();
-  const { swaps, loading, updateSwapStatus, createSwap } = useSwaps(user?.id);
+  const { swaps, loading, updateSwapStatus, createSwap, withdrawSwap } = useSwaps(user?.id);
   const { profiles } = useDiscovery(user?.id);
   const { skills } = useSkills();
 
@@ -72,7 +72,7 @@ export function SwapsPanel({ onScheduleSession }: SwapsPanelProps) {
       setSelectedPartnerId(''); setPartnerSearch('');
       setOfferSkill(''); setWantSkill(''); setMessage('');
     } else {
-      toast.error('Failed to send proposal. Try again.');
+      toast.error(error || 'Failed to send proposal. Try again.');
     }
   };
 
@@ -84,6 +84,15 @@ export function SwapsPanel({ onScheduleSession }: SwapsPanelProps) {
   const handleDecline = async (id: string) => {
     await updateSwapStatus(id, 'declined');
     toast.info('Swap declined.');
+  };
+
+  const handleWithdraw = async (id: string) => {
+    const { error } = await withdrawSwap(id);
+    if (!error) {
+      toast.info('Proposal withdrawn.');
+    } else {
+      toast.error('Could not withdraw proposal.');
+    }
   };
 
   const displayedSwaps = activeTab === 'incoming' ? incoming : outgoing;
@@ -410,6 +419,16 @@ export function SwapsPanel({ onScheduleSession }: SwapsPanelProps) {
                           whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                         >
                           Schedule Session
+                        </motion.button>
+                      )}
+                      {!isIncoming && req.status === 'pending' && (
+                        <motion.button
+                          onClick={() => handleWithdraw(req.id)}
+                          whileHover={{ scale: 1.1 }} whileTap={{ scale: 0.9 }}
+                          className="text-xs px-3 py-1.5 rounded-full whitespace-nowrap"
+                          style={{ background: '#A8544812', color: '#A85448', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                        >
+                          Withdraw
                         </motion.button>
                       )}
                     </div>

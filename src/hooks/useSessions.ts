@@ -51,7 +51,7 @@ export function useSessions(userId: string | undefined) {
   }) => {
     if (!userId) return { error: 'Not authenticated', session: null };
 
-    const jitsiRoom = `skillswap-${crypto.randomUUID().slice(0, 8)}`;
+    const jitsiRoom = `skillswap-${crypto.randomUUID()}`;
     const { data, error } = await supabase
       .from('sessions')
       .insert({

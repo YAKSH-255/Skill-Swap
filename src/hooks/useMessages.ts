@@ -102,6 +102,7 @@ export function useMessages(userId: string | undefined, partnerId?: string) {
   // ── Send a message ────────────────────────────────────────────────────────
   const sendMessage = async (receiverId: string, content: string, swapId?: string) => {
     if (!userId) return { error: 'Not authenticated' };
+    if (receiverId === userId) return { error: 'You cannot message yourself.' };
     const { error } = await supabase.from('messages').insert({
       sender_id: userId,
       receiver_id: receiverId,
