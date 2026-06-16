@@ -221,6 +221,7 @@ export function DiscoveryPanel() {
                   style={{ border: `1px solid ${O.border}`, background: O.card, color: O.fg }}
                 >
                   <option value="">You teach...</option>
+                  <option value="None">None (Request Mentorship)</option>
                   {skills.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
                 <select

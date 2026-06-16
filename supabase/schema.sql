@@ -323,25 +323,49 @@ ALTER PUBLICATION supabase_realtime ADD TABLE reviews;
 CREATE OR REPLACE FUNCTION public.award_session_xp()
 RETURNS TRIGGER AS $$
 DECLARE
+  v_offer_skill TEXT;
+  v_from_user_id UUID;
+  v_to_user_id UUID;
   mentor_xp_gain INT;
   learner_xp_gain INT;
 BEGIN
   -- Only trigger when a session is marked as 'completed'
   IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
     
-    -- Generate random XP between 1 and 100
-    mentor_xp_gain := floor(random() * 100 + 1)::INT;
-    learner_xp_gain := floor(random() * 100 + 1)::INT;
+    -- Check if there is an associated swap proposal
+    IF NEW.swap_id IS NOT NULL THEN
+      SELECT offer_skill, from_user_id, to_user_id 
+      INTO v_offer_skill, v_from_user_id, v_to_user_id
+      FROM swap_proposals WHERE id = NEW.swap_id;
+      
+      IF v_offer_skill = 'None' THEN
+        -- 1-Way Mentorship: to_user_id is Mentor, from_user_id is Learner
+        mentor_xp_gain := floor(random() * 100 + 1)::INT;
+        learner_xp_gain := floor(random() * 30 + 1)::INT;
 
-    -- Update host (Mentor) profile with teacher XP
-    UPDATE profiles 
-    SET teacher_xp = teacher_xp + mentor_xp_gain
-    WHERE id = NEW.host_id;
+        UPDATE profiles SET teacher_xp = teacher_xp + mentor_xp_gain WHERE id = v_to_user_id;
+        UPDATE profiles SET learner_xp = learner_xp + learner_xp_gain WHERE id = v_from_user_id;
+      ELSE
+        -- 2-Way Swap: Both users get full XP (they both taught and both learned)
+        mentor_xp_gain := floor(random() * 100 + 1)::INT;
+        learner_xp_gain := floor(random() * 100 + 1)::INT;
 
-    -- Update guest (Learner) profile with learner XP
-    UPDATE profiles 
-    SET learner_xp = learner_xp + learner_xp_gain
-    WHERE id = NEW.guest_id;
+        UPDATE profiles 
+        SET teacher_xp = teacher_xp + mentor_xp_gain, learner_xp = learner_xp + learner_xp_gain 
+        WHERE id = v_from_user_id;
+
+        UPDATE profiles 
+        SET teacher_xp = teacher_xp + mentor_xp_gain, learner_xp = learner_xp + learner_xp_gain 
+        WHERE id = v_to_user_id;
+      END IF;
+    ELSE
+      -- Fallback if there is no swap_id
+      mentor_xp_gain := floor(random() * 100 + 1)::INT;
+      learner_xp_gain := floor(random() * 100 + 1)::INT;
+
+      UPDATE profiles SET teacher_xp = teacher_xp + mentor_xp_gain WHERE id = NEW.host_id;
+      UPDATE profiles SET learner_xp = learner_xp + learner_xp_gain WHERE id = NEW.guest_id;
+    END IF;
 
   END IF;
   

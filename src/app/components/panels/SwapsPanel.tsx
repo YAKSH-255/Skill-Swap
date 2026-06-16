@@ -233,6 +233,7 @@ export function SwapsPanel({ onScheduleSession }: SwapsPanelProps) {
                   style={{ border: `1px solid ${O.border}`, background: O.card, color: O.fg }}
                 >
                   <option value="">You teach...</option>
+                  <option value="None">None (Request Mentorship)</option>
                   {skills.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                 </select>
                 <select
@@ -372,15 +373,24 @@ export function SwapsPanel({ onScheduleSession }: SwapsPanelProps) {
                         )}
                       </div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
-                          style={{ background: `${O.primary}14`, color: O.primary, fontWeight: 700 }}>
-                          <Zap size={10} /> {req.offer_skill}
-                        </span>
-                        <Repeat2 size={12} style={{ color: O.mutedFg }} />
-                        <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
-                          style={{ background: `${O.secondary}14`, color: O.secondary, fontWeight: 700 }}>
-                          <Star size={10} /> {req.want_skill}
-                        </span>
+                        {req.offer_skill !== 'None' ? (
+                          <>
+                            <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
+                              style={{ background: `${O.primary}14`, color: O.primary, fontWeight: 700 }}>
+                              <Zap size={10} /> {req.offer_skill}
+                            </span>
+                            <Repeat2 size={12} style={{ color: O.mutedFg }} />
+                            <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
+                              style={{ background: `${O.secondary}14`, color: O.secondary, fontWeight: 700 }}>
+                              <Star size={10} /> {req.want_skill}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs px-2 py-1 rounded-full"
+                            style={{ background: `${O.secondary}14`, color: O.secondary, fontWeight: 700 }}>
+                            <Star size={10} /> {isIncoming ? 'Wants to learn ' : 'Requesting to learn '} {req.want_skill}
+                          </span>
+                        )}
                       </div>
                       {req.message && (
                         <p className="text-xs mt-2" style={{ color: O.mutedFg, fontStyle: 'italic' }}>
