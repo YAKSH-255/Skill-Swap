@@ -7,22 +7,27 @@ export function useMessages(userId: string | undefined, partnerId?: string) {
   const [conversations, setConversations] = useState<{ partner: Profile; lastMessage: Message; unread: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ── Fetch messages for a specific conversation ────────────────────────────
   const fetchMessages = useCallback(async () => {
     if (!userId) { setMessages([]); setLoading(false); return; }
 
+    // Fix: when a partnerId is supplied, build a single .or() that covers both
+    // directions exactly — avoids Supabase double-.or() conflict.
     let query = supabase
       .from('messages')
       .select(`
         *,
         sender_profile:profiles!messages_sender_id_fkey(id, full_name, avatar_url)
       `)
-      .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
       .order('created_at', { ascending: true });
 
     if (partnerId) {
+      // Single OR clause covering both directions in one call
       query = query.or(
         `and(sender_id.eq.${userId},receiver_id.eq.${partnerId}),and(sender_id.eq.${partnerId},receiver_id.eq.${userId})`,
       );
+    } else {
+      query = query.or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
     }
 
     const { data, error } = await query;
@@ -30,6 +35,7 @@ export function useMessages(userId: string | undefined, partnerId?: string) {
     setLoading(false);
   }, [userId, partnerId]);
 
+  // ── Fetch conversation list (sidebar) ─────────────────────────────────────
   const fetchConversations = useCallback(async () => {
     if (!userId) return;
 
@@ -68,39 +74,32 @@ export function useMessages(userId: string | undefined, partnerId?: string) {
     setConversations(Array.from(partnerMap.values()));
   }, [userId]);
 
+  // ── Initial fetch ─────────────────────────────────────────────────────────
   useEffect(() => {
     fetchMessages();
     if (!partnerId) fetchConversations();
   }, [fetchMessages, fetchConversations, partnerId]);
 
+  // ── Realtime subscription ─────────────────────────────────────────────────
   useEffect(() => {
     if (!userId) return;
 
     const channel = supabase
       .channel(`messages-realtime:${userId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'messages' },
-        () => {
-          fetchMessages();
-          fetchConversations();
-        },
-      )
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'messages' },
-        () => {
-          fetchMessages();
-          fetchConversations();
-        },
-      )
-      .subscribe((status) => {
-        console.log(`Messages realtime status for ${userId}:`, status);
-      });
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+        fetchMessages();
+        fetchConversations();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, () => {
+        fetchMessages();
+        fetchConversations();
+      })
+      .subscribe();
 
     return () => { supabase.removeChannel(channel); };
   }, [userId, fetchMessages, fetchConversations]);
 
+  // ── Send a message ────────────────────────────────────────────────────────
   const sendMessage = async (receiverId: string, content: string, swapId?: string) => {
     if (!userId) return { error: 'Not authenticated' };
     const { error } = await supabase.from('messages').insert({
@@ -112,5 +111,14 @@ export function useMessages(userId: string | undefined, partnerId?: string) {
     return { error: error?.message ?? null };
   };
 
-  return { messages, conversations, loading, sendMessage, refetch: fetchMessages };
+  // ── Mark a single message as read ─────────────────────────────────────────
+  const markRead = async (messageId: string) => {
+    await supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('id', messageId)
+      .is('read_at', null);
+  };
+
+  return { messages, conversations, loading, sendMessage, markRead, refetch: fetchMessages };
 }

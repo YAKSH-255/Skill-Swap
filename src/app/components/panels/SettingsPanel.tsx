@@ -1,35 +1,54 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'motion/react';
-import { Save, Plus, Trash2, User, Clock, FileText, Zap, Star } from 'lucide-react';
+import { Save, Plus, Trash2, User, Clock, FileText, Zap, Star, Eye } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSkills } from '@/hooks/useDiscovery';
 import type { UserSkill } from '@/types/database';
+import { toast } from 'sonner';
 
 const O = {
   fg: '#2C2C24', primary: '#5D7052', secondary: '#C18C5D',
   muted: '#F0EBE5', mutedFg: '#78786C', border: '#DED8CF', card: '#FEFEFA',
 };
 
+const TIMEZONES = [
+  { value: 'UTC', label: 'UTC' },
+  { value: 'America/New_York', label: 'Eastern Time (ET)' },
+  { value: 'America/Chicago', label: 'Central Time (CT)' },
+  { value: 'America/Denver', label: 'Mountain Time (MT)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (PT)' },
+  { value: 'America/Sao_Paulo', label: 'Brazil Time (BRT)' },
+  { value: 'Europe/London', label: 'London (GMT/BST)' },
+  { value: 'Europe/Paris', label: 'Central European Time (CET)' },
+  { value: 'Europe/Moscow', label: 'Moscow Time (MSK)' },
+  { value: 'Asia/Dubai', label: 'Gulf Standard Time (GST)' },
+  { value: 'Asia/Kolkata', label: 'India Standard Time (IST)' },
+  { value: 'Asia/Bangkok', label: 'Indochina Time (ICT)' },
+  { value: 'Asia/Shanghai', label: 'China Standard Time (CST)' },
+  { value: 'Asia/Tokyo', label: 'Japan Standard Time (JST)' },
+  { value: 'Australia/Sydney', label: 'Australian Eastern Time (AET)' },
+];
+
 export function SettingsPanel() {
   const { user, profile, refreshProfile } = useAuth();
   const { skills } = useSkills();
-  
+
   // Profile state
   const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url ?? '');
   const [bio, setBio] = useState(profile?.bio ?? '');
   const [timezone, setTimezone] = useState(profile?.timezone ?? 'UTC');
   const [savingProfile, setSavingProfile] = useState(false);
-  const [profileMessage, setProfileMessage] = useState('');
+  const [avatarError, setAvatarError] = useState(false);
 
   // Skills state
   const [userSkills, setUserSkills] = useState<(UserSkill & { skills?: { name: string; category: string } })[]>([]);
   const [loadingSkills, setLoadingSkills] = useState(true);
-  
   const [teachSkill, setTeachSkill] = useState('');
   const [learnSkill, setLearnSkill] = useState('');
 
+  // Sync profile changes
   useEffect(() => {
     if (profile) {
       setFullName(profile.full_name ?? '');
@@ -39,227 +58,297 @@ export function SettingsPanel() {
     }
   }, [profile]);
 
-  const fetchUserSkills = async () => {
-    if (!user) return;
+  // Fixed: stable fetchUserSkills that doesn't re-create on every render
+  const fetchUserSkills = useCallback(async () => {
+    if (!user?.id) return;
     setLoadingSkills(true);
     const { data, error } = await supabase
       .from('user_skills')
       .select('*, skills(name, category)')
       .eq('user_id', user.id);
-    
-    if (!error && data) {
-      setUserSkills(data as any);
-    }
+    if (!error && data) setUserSkills(data as (UserSkill & { skills?: { name: string; category: string } })[]);
     setLoadingSkills(false);
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     fetchUserSkills();
-  }, [user]);
+  }, [fetchUserSkills]);
 
   const handleSaveProfile = async () => {
     if (!user) return;
     setSavingProfile(true);
-    setProfileMessage('');
-    
     const { error } = await supabase
       .from('profiles')
       .update({ full_name: fullName, avatar_url: avatarUrl, bio, timezone })
       .eq('id', user.id);
-      
+
     if (!error) {
       await refreshProfile();
-      setProfileMessage('Profile updated successfully!');
-      setTimeout(() => setProfileMessage(''), 3000);
+      toast.success('Profile updated successfully! ✅');
     } else {
-      setProfileMessage('Error updating profile.');
+      toast.error('Error updating profile. Please try again.');
     }
     setSavingProfile(false);
   };
 
   const handleAddSkill = async (skillId: string, skillType: 'teach' | 'learn') => {
     if (!user || !skillId) return;
-    
     const skill = skills.find((s) => s.id === skillId);
     if (!skill) return;
 
-    const description = skillType === 'teach' ? `I can teach ${skill.name}` : `I want to learn ${skill.name}`;
-    
-    await supabase.from('user_skills').upsert({
-      user_id: user.id, 
-      skill_id: skill.id, 
-      skill_type: skillType, 
-      description,
+    const { error } = await supabase.from('user_skills').upsert({
+      user_id: user.id,
+      skill_id: skill.id,
+      skill_type: skillType,
+      description: skillType === 'teach' ? `I can teach ${skill.name}` : `I want to learn ${skill.name}`,
     }, { onConflict: 'user_id,skill_id,skill_type' });
-    
-    if (skillType === 'teach') setTeachSkill('');
-    else setLearnSkill('');
-    
-    fetchUserSkills();
+
+    if (!error) {
+      toast.success(`Added ${skill.name} to your ${skillType} list!`);
+      if (skillType === 'teach') setTeachSkill('');
+      else setLearnSkill('');
+      fetchUserSkills();
+    } else {
+      toast.error('Failed to add skill.');
+    }
   };
 
-  const handleRemoveSkill = async (userSkillId: string) => {
-    await supabase.from('user_skills').delete().eq('id', userSkillId);
-    fetchUserSkills();
+  const handleRemoveSkill = async (userSkillId: string, skillName: string) => {
+    const { error } = await supabase.from('user_skills').delete().eq('id', userSkillId);
+    if (!error) {
+      toast.success(`Removed ${skillName}.`);
+      fetchUserSkills();
+    }
   };
 
-  const teachSkillsList = userSkills.filter(s => s.skill_type === 'teach');
-  const learnSkillsList = userSkills.filter(s => s.skill_type === 'learn');
+  const teachSkillsList = userSkills.filter((s) => s.skill_type === 'teach');
+  const learnSkillsList = userSkills.filter((s) => s.skill_type === 'learn');
 
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h3 style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 24 }}>Settings</h3>
-        <p style={{ fontSize: 14, color: O.mutedFg }}>Manage your profile and skills</p>
+        <h3 style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 22 }}>Settings</h3>
+        <p style={{ fontSize: 14, color: O.mutedFg }}>Manage your profile, avatar, and skills</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Profile Section */}
-        <motion.div className="p-6 rounded-3xl space-y-4"
+        {/* ── Profile Section ── */}
+        <motion.div
+          className="p-6 rounded-3xl space-y-4"
           style={{ background: O.card, border: `1px solid ${O.border}` }}
-          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h4 style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 18 }}>Personal Info</h4>
-          
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+        >
+          <h4 style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 17 }}>Personal Info</h4>
+
+          {/* Avatar Preview */}
+          <div className="flex items-center gap-4 p-3 rounded-2xl" style={{ background: O.muted }}>
+            <div
+              className="w-14 h-14 rounded-full overflow-hidden flex items-center justify-center text-white font-black shrink-0"
+              style={{ background: O.primary, fontSize: 20 }}
+            >
+              {avatarUrl && !avatarError ? (
+                <img
+                  src={avatarUrl}
+                  alt="Avatar preview"
+                  className="w-full h-full object-cover"
+                  onError={() => setAvatarError(true)}
+                  onLoad={() => setAvatarError(false)}
+                />
+              ) : (
+                (fullName || 'U').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold mb-1.5" style={{ color: O.mutedFg }}>
+                <Eye size={11} className="inline mr-1" /> AVATAR PREVIEW
+              </p>
+              <input
+                value={avatarUrl}
+                onChange={(e) => { setAvatarUrl(e.target.value); setAvatarError(false); }}
+                placeholder="Paste image URL..."
+                className="w-full px-3 py-1.5 rounded-lg text-xs outline-none"
+                style={{ border: `1px solid ${avatarError ? '#A85448' : O.border}`, background: O.card, color: O.fg }}
+              />
+              {avatarError && (
+                <p className="text-xs mt-1" style={{ color: '#A85448' }}>⚠ Image failed to load</p>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-3">
             <div>
-              <label className="flex items-center gap-2 text-xs font-bold mb-1" style={{ color: O.mutedFg }}>
-                <User size={14} /> Full Name
+              <label className="flex items-center gap-2 text-xs font-bold mb-1.5" style={{ color: O.mutedFg }}>
+                <User size={12} /> FULL NAME
               </label>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }} />
+              <input
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }}
+              />
             </div>
 
             <div>
-              <label className="flex items-center gap-2 text-xs font-bold mb-1" style={{ color: O.mutedFg }}>
-                <FileText size={14} /> Avatar URL
+              <label className="flex items-center gap-2 text-xs font-bold mb-1.5" style={{ color: O.mutedFg }}>
+                <FileText size={12} /> BIO
               </label>
-              <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://example.com/avatar.png"
-                className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }} />
+              <textarea
+                value={bio}
+                onChange={(e) => setBio(e.target.value)}
+                rows={3}
+                placeholder="Tell the community about yourself..."
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none resize-none"
+                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg, lineHeight: 1.6 }}
+              />
             </div>
 
             <div>
-              <label className="flex items-center gap-2 text-xs font-bold mb-1" style={{ color: O.mutedFg }}>
-                <FileText size={14} /> Bio
+              <label className="flex items-center gap-2 text-xs font-bold mb-1.5" style={{ color: O.mutedFg }}>
+                <Clock size={12} /> TIMEZONE
               </label>
-              <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
-                className="w-full px-3 py-2 rounded-xl text-sm outline-none resize-none"
-                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }} />
-            </div>
-
-            <div>
-              <label className="flex items-center gap-2 text-xs font-bold mb-1" style={{ color: O.mutedFg }}>
-                <Clock size={14} /> Timezone
-              </label>
-              <select value={timezone} onChange={(e) => setTimezone(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl text-sm outline-none"
-                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }}>
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">Eastern Time (ET)</option>
-                <option value="America/Chicago">Central Time (CT)</option>
-                <option value="America/Denver">Mountain Time (MT)</option>
-                <option value="America/Los_Angeles">Pacific Time (PT)</option>
-                <option value="Europe/London">London (GMT/BST)</option>
-                <option value="Europe/Paris">Central European Time (CET)</option>
-                <option value="Asia/Tokyo">Japan Standard Time (JST)</option>
-                <option value="Asia/Kolkata">India Standard Time (IST)</option>
-                <option value="Australia/Sydney">Australian Eastern Time (AET)</option>
+              <select
+                value={timezone}
+                onChange={(e) => setTimezone(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }}
+              >
+                {TIMEZONES.map((tz) => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
               </select>
             </div>
           </div>
 
-          <div className="pt-2">
-            <button onClick={handleSaveProfile} disabled={savingProfile}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm"
-              style={{ background: O.primary, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: savingProfile ? 0.7 : 1 }}>
-              <Save size={16} /> {savingProfile ? 'Saving...' : 'Save Profile'}
-            </button>
-            {profileMessage && (
-              <p className="text-xs text-center mt-2 font-semibold" style={{ color: O.primary }}>{profileMessage}</p>
-            )}
-          </div>
+          <motion.button
+            onClick={handleSaveProfile}
+            disabled={savingProfile}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-white text-sm"
+            style={{ background: O.primary, fontWeight: 700, border: 'none', cursor: 'pointer', opacity: savingProfile ? 0.7 : 1 }}
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+          >
+            <Save size={15} /> {savingProfile ? 'Saving...' : 'Save Profile'}
+          </motion.button>
         </motion.div>
 
-        {/* Skills Section */}
-        <div className="space-y-6">
-          <motion.div className="p-6 rounded-3xl space-y-4"
+        {/* ── Skills Section ── */}
+        <div className="space-y-5">
+          {/* Teach Skills */}
+          <motion.div
+            className="p-6 rounded-3xl space-y-4"
             style={{ background: O.card, border: `1px solid ${O.border}` }}
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.1 } }}>
-            <h4 className="flex items-center gap-2" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 18 }}>
-              <Zap size={18} style={{ color: O.primary }} /> Skills You Teach
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.08 } }}
+          >
+            <h4 className="flex items-center gap-2" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 17 }}>
+              <Zap size={17} style={{ color: O.primary }} /> Skills You Teach
             </h4>
-            
-            <div className="flex flex-wrap gap-2 mb-2">
-              {teachSkillsList.map(us => (
-                <div key={us.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs"
-                  style={{ background: `${O.primary}15`, color: O.primary, border: `1px solid ${O.primary}30`, fontWeight: 700 }}>
-                  {us.skills?.name}
-                  <button onClick={() => handleRemoveSkill(us.id)} className="ml-1 hover:opacity-70"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: O.primary }}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-              {teachSkillsList.length === 0 && !loadingSkills && (
+
+            <div className="flex flex-wrap gap-2 min-h-[36px]">
+              {loadingSkills ? (
+                <div className="w-full h-8 rounded-full animate-pulse" style={{ background: O.muted }} />
+              ) : teachSkillsList.length === 0 ? (
                 <p className="text-xs italic" style={{ color: O.mutedFg }}>No teaching skills added yet.</p>
+              ) : (
+                teachSkillsList.map((us) => (
+                  <motion.div
+                    key={us.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs"
+                    style={{ background: `${O.primary}15`, color: O.primary, border: `1px solid ${O.primary}28`, fontWeight: 700 }}
+                    initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                  >
+                    {us.skills?.name}
+                    <button
+                      onClick={() => handleRemoveSkill(us.id, us.skills?.name ?? '')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: O.primary, padding: 0, lineHeight: 1 }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </motion.div>
+                ))
               )}
             </div>
 
             <div className="flex gap-2">
-              <select value={teachSkill} onChange={(e) => setTeachSkill(e.target.value)}
+              <select
+                value={teachSkill}
+                onChange={(e) => setTeachSkill(e.target.value)}
                 className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
-                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }}>
+                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }}
+              >
                 <option value="">Add a skill to teach...</option>
-                {skills.filter(s => !teachSkillsList.some(ts => ts.skill_id === s.id)).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.category})</option>
-                ))}
+                {skills
+                  .filter((s) => !teachSkillsList.some((ts) => ts.skill_id === s.id))
+                  .map((s) => <option key={s.id} value={s.id}>{s.name} ({s.category})</option>)
+                }
               </select>
-              <button onClick={() => handleAddSkill(teachSkill, 'teach')} disabled={!teachSkill}
+              <motion.button
+                onClick={() => handleAddSkill(teachSkill, 'teach')}
+                disabled={!teachSkill}
                 className="px-3 py-2 rounded-xl text-white flex items-center justify-center"
-                style={{ background: O.primary, border: 'none', cursor: 'pointer', opacity: teachSkill ? 1 : 0.5 }}>
+                style={{ background: O.primary, border: 'none', cursor: 'pointer', opacity: teachSkill ? 1 : 0.45 }}
+                whileHover={{ scale: teachSkill ? 1.08 : 1 }} whileTap={{ scale: 0.92 }}
+              >
                 <Plus size={16} />
-              </button>
+              </motion.button>
             </div>
           </motion.div>
 
-          <motion.div className="p-6 rounded-3xl space-y-4"
+          {/* Learn Skills */}
+          <motion.div
+            className="p-6 rounded-3xl space-y-4"
             style={{ background: O.card, border: `1px solid ${O.border}` }}
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.2 } }}>
-            <h4 className="flex items-center gap-2" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 18 }}>
-              <Star size={18} style={{ color: O.secondary }} /> Skills You Learn
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.16 } }}
+          >
+            <h4 className="flex items-center gap-2" style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 17 }}>
+              <Star size={17} style={{ color: O.secondary }} /> Skills You Learn
             </h4>
-            
-            <div className="flex flex-wrap gap-2 mb-2">
-              {learnSkillsList.map(us => (
-                <div key={us.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs"
-                  style={{ background: `${O.secondary}15`, color: O.secondary, border: `1px solid ${O.secondary}30`, fontWeight: 700 }}>
-                  {us.skills?.name}
-                  <button onClick={() => handleRemoveSkill(us.id)} className="ml-1 hover:opacity-70"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: O.secondary }}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-              {learnSkillsList.length === 0 && !loadingSkills && (
+
+            <div className="flex flex-wrap gap-2 min-h-[36px]">
+              {loadingSkills ? (
+                <div className="w-full h-8 rounded-full animate-pulse" style={{ background: O.muted }} />
+              ) : learnSkillsList.length === 0 ? (
                 <p className="text-xs italic" style={{ color: O.mutedFg }}>No learning skills added yet.</p>
+              ) : (
+                learnSkillsList.map((us) => (
+                  <motion.div
+                    key={us.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs"
+                    style={{ background: `${O.secondary}15`, color: O.secondary, border: `1px solid ${O.secondary}28`, fontWeight: 700 }}
+                    initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                  >
+                    {us.skills?.name}
+                    <button
+                      onClick={() => handleRemoveSkill(us.id, us.skills?.name ?? '')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: O.secondary, padding: 0, lineHeight: 1 }}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </motion.div>
+                ))
               )}
             </div>
 
             <div className="flex gap-2">
-              <select value={learnSkill} onChange={(e) => setLearnSkill(e.target.value)}
+              <select
+                value={learnSkill}
+                onChange={(e) => setLearnSkill(e.target.value)}
                 className="flex-1 px-3 py-2 rounded-xl text-sm outline-none"
-                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }}>
+                style={{ border: `1px solid ${O.border}`, background: O.muted, color: O.fg }}
+              >
                 <option value="">Add a skill to learn...</option>
-                {skills.filter(s => !learnSkillsList.some(ls => ls.skill_id === s.id)).map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.category})</option>
-                ))}
+                {skills
+                  .filter((s) => !learnSkillsList.some((ls) => ls.skill_id === s.id))
+                  .map((s) => <option key={s.id} value={s.id}>{s.name} ({s.category})</option>)
+                }
               </select>
-              <button onClick={() => handleAddSkill(learnSkill, 'learn')} disabled={!learnSkill}
+              <motion.button
+                onClick={() => handleAddSkill(learnSkill, 'learn')}
+                disabled={!learnSkill}
                 className="px-3 py-2 rounded-xl text-white flex items-center justify-center"
-                style={{ background: O.secondary, border: 'none', cursor: 'pointer', opacity: learnSkill ? 1 : 0.5 }}>
+                style={{ background: O.secondary, border: 'none', cursor: 'pointer', opacity: learnSkill ? 1 : 0.45 }}
+                whileHover={{ scale: learnSkill ? 1.08 : 1 }} whileTap={{ scale: 0.92 }}
+              >
                 <Plus size={16} />
-              </button>
+              </motion.button>
             </div>
           </motion.div>
         </div>

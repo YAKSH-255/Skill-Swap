@@ -17,6 +17,7 @@ import { CommunityPanel } from './panels/CommunityPanel';
 import { SettingsPanel } from './panels/SettingsPanel';
 import { JitsiSessionRoom } from './JitsiSessionRoom';
 import { ProfileSetup } from './ProfileSetup';
+import { UserProfileModal } from './UserProfileModal';
 import type { Session, SwapProposal } from '@/types/database';
 
 const O = {
@@ -65,10 +66,17 @@ export function RealtimeDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [activeNav, setActiveNav] = useState('dashboard');
+  const [prevNav, setPrevNav] = useState('dashboard');
   const [notifOpen, setNotifOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeSession, setActiveSession] = useState<Session | null>(null);
   const [scheduleFor, setScheduleFor] = useState<{ swap: SwapProposal; partnerId: string } | null>(null);
+  const [viewProfileId, setViewProfileId] = useState<string | null>(null);
+
+  const navigateTo = (key: string) => {
+    setPrevNav(activeNav);
+    setActiveNav(key);
+  };
 
   const pendingSwaps = swaps.filter((s) => s.to_user_id === user?.id && s.status === 'pending').length;
   const displayName = profile?.full_name ?? user?.email ?? 'User';
@@ -77,7 +85,15 @@ export function RealtimeDashboard() {
 
   const handleScheduleSession = (swap: SwapProposal, partnerId: string) => {
     setScheduleFor({ swap, partnerId });
-    setActiveNav('sessions');
+    navigateTo('sessions');
+  };
+
+  // Leaderboard avatar colors
+  const leaderAvatarColor = (name: string) => {
+    const colors = ['#5D7052', '#C18C5D', '#8B7355', '#7B8FA1', '#A87D6B', '#6B8E6B', '#9B8260', '#7A6E9C'];
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+    return colors[Math.abs(hash) % colors.length];
   };
 
   const renderContent = () => {
@@ -96,25 +112,34 @@ export function RealtimeDashboard() {
       case 'settings': return <SettingsPanel />;
       case 'leaderboard': return (
         <div className="space-y-4">
-          <h3 style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg }}>Leaderboard</h3>
-          <p style={{ fontSize: 13, color: O.mutedFg }}>Top learners by XP — updates in realtime</p>
+          <div>
+            <h3 style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, color: O.fg, fontSize: 20 }}>Leaderboard</h3>
+            <p style={{ fontSize: 13, color: O.mutedFg }}>Top learners by XP — updates in realtime</p>
+          </div>
           <div className="space-y-2">
             {leaders.map((u, i) => (
-              <div key={u.id} className="flex items-center gap-3 p-4 rounded-2xl"
+              <motion.div key={u.id} className="flex items-center gap-3 p-4 rounded-2xl"
                 style={{
                   background: u.id === user?.id ? `${O.primary}10` : O.muted,
                   border: `1px solid ${u.id === user?.id ? O.primary + '30' : O.border}`,
-                }}>
-                <span style={{ fontWeight: 800, width: 28, color: i < 3 ? O.secondary : O.mutedFg }}>
+                }}
+                initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: i * 0.04 }}
+                whileHover={{ x: 4 }}
+              >
+                <span style={{ fontWeight: 800, width: 28, color: i < 3 ? O.secondary : O.mutedFg, fontSize: i < 3 ? 20 : 14 }}>
                   {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : i + 1}
                 </span>
-                <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white overflow-hidden"
-                  style={{ background: O.primary, fontWeight: 800 }}>
+                <button
+                  onClick={() => u.id !== user?.id && setViewProfileId(u.id)}
+                  className="w-9 h-9 rounded-full flex items-center justify-center text-xs text-white overflow-hidden"
+                  style={{ background: leaderAvatarColor(u.full_name ?? ''), fontWeight: 800, border: 'none', cursor: u.id !== user?.id ? 'pointer' : 'default' }}
+                >
                   {u.avatar_url ? <img src={u.avatar_url} alt="" className="w-full h-full object-cover" /> : initials(u.full_name)}
-                </div>
+                </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm truncate" style={{ fontWeight: u.id === user?.id ? 800 : 600, color: O.fg }}>
-                    {u.full_name} {u.id === user?.id && '(you)'}
+                    {u.full_name} {u.id === user?.id && <span style={{ color: O.primary }}>(you)</span>}
                   </p>
                   <p className="text-xs" style={{ color: getTitle(u.learner_xp + u.teacher_xp).color, fontWeight: 700 }}>
                     {getTitle(u.learner_xp + u.teacher_xp).emoji} {getTitle(u.learner_xp + u.teacher_xp).name}
@@ -123,7 +148,7 @@ export function RealtimeDashboard() {
                 <span style={{ fontSize: 13, color: O.primary, fontWeight: 800 }}>
                   {(u.learner_xp + u.teacher_xp).toLocaleString()} XP
                 </span>
-              </div>
+              </motion.div>
             ))}
             {leaders.length === 0 && (
               <p className="text-center py-8" style={{ color: O.mutedFg }}>No users on the leaderboard yet.</p>
@@ -152,12 +177,12 @@ export function RealtimeDashboard() {
                 </span>
               </div>
               <div className="flex gap-3 mt-4 flex-wrap">
-                <button onClick={() => setActiveNav('discover')}
+                <button onClick={() => navigateTo('discover')}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm"
                   style={{ background: 'rgba(255,255,255,0.18)', color: O.primaryFg, fontWeight: 800, border: '1px solid rgba(255,255,255,0.25)', cursor: 'pointer' }}>
                   <Compass size={14} /> Find Swap Partner
                 </button>
-                <button onClick={() => setActiveNav('sessions')}
+                <button onClick={() => navigateTo('sessions')}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-full text-sm"
                   style={{ background: `${O.secondary}50`, border: `1px solid ${O.secondary}70`, color: O.primaryFg, fontWeight: 800, cursor: 'pointer' }}>
                   <Calendar size={14} /> My Sessions
@@ -173,11 +198,12 @@ export function RealtimeDashboard() {
               { icon: Repeat2, label: 'Active Swaps', value: String(swaps.filter((s) => s.status === 'accepted').length), color: '#8B7355' },
               { icon: Trophy, label: 'Reputation', value: Number(profile?.reputation_score ?? 50).toFixed(1), color: '#B8956A' },
             ].map(({ icon: Icon, label, value, color }) => (
-              <div key={label} className="p-5 rounded-2xl" style={{ background: O.card, border: `1px solid ${O.border}`, boxShadow: shadowSoft }}>
+              <motion.div key={label} className="p-5 rounded-2xl" style={{ background: O.card, border: `1px solid ${O.border}`, boxShadow: shadowSoft }}
+                whileHover={{ y: -3, boxShadow: shadowFloat }}>
                 <Icon size={22} style={{ color, marginBottom: 12 }} />
                 <p style={{ fontSize: 24, fontWeight: 800, color: O.fg, fontFamily: "'Fraunces', serif" }}>{value}</p>
                 <p style={{ fontSize: 13, color: O.mutedFg, fontWeight: 600 }}>{label}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
 
@@ -190,6 +216,10 @@ export function RealtimeDashboard() {
   return (
     <>
       {!profile?.bio && profile && <ProfileSetup />}
+
+      {viewProfileId && (
+        <UserProfileModal userId={viewProfileId} onClose={() => setViewProfileId(null)} />
+      )}
 
       {activeSession && (
         <JitsiSessionRoom
@@ -234,7 +264,7 @@ export function RealtimeDashboard() {
                   const isActive = activeNav === key;
                   const badge = key === 'swaps' ? pendingSwaps : key === 'messages' ? undefined : undefined;
                   return (
-                    <button key={key} onClick={() => { setActiveNav(key); setMobileSidebarOpen(false); }}
+                  <button key={key} onClick={() => { navigateTo(key); setMobileSidebarOpen(false); }}
                       className="w-full flex items-center gap-3 px-3 py-2.5 text-left relative mb-1"
                       style={{
                         background: isActive ? `${O.primary}18` : 'transparent',
@@ -361,7 +391,17 @@ export function RealtimeDashboard() {
           </header>
 
           <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-            {renderContent()}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeNav}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.18, ease: 'easeOut' }}
+              >
+                {renderContent()}
+              </motion.div>
+            </AnimatePresence>
           </main>
         </div>
       </div>

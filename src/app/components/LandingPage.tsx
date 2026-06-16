@@ -885,6 +885,191 @@ export function LandingPage({ onGetStarted, onSignIn }: LandingPageProps) {
         </div>
       </section>
 
+      {/* ── Pricing ── */}
+      <section
+        style={{
+          background: O.muted,
+          borderTop: `1px solid ${O.border}`,
+          borderBottom: `1px solid ${O.border}`,
+          padding: 'clamp(64px,10vw,120px) clamp(20px,5vw,80px)',
+        }}
+      >
+        <div style={{ maxWidth: 1000, margin: '0 auto' }}>
+          <motion.div
+            style={{ textAlign: 'center', marginBottom: 56 }}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                background: `${O.primary}15`,
+                border: `1px solid ${O.primary}30`,
+                borderRadius: 9999,
+                padding: '5px 18px',
+                fontSize: 12, fontWeight: 700,
+                color: O.primary, letterSpacing: '0.08em',
+                marginBottom: 18, textTransform: 'uppercase',
+              }}
+            >
+              Pricing
+            </span>
+            <h2
+              style={{
+                fontFamily: fontHeading, fontWeight: 800,
+                fontSize: 'clamp(1.8rem,4vw,3rem)',
+                letterSpacing: '-0.02em', color: O.fg,
+                marginBottom: 12,
+              }}
+            >
+              Free forever.{' '}
+              <span style={{ color: O.primary, fontStyle: 'italic' }}>No catch.</span>
+            </h2>
+            <p style={{ fontSize: 17, color: O.mutedFg, maxWidth: 480, margin: '0 auto' }}>
+              SwapSkill runs on the power of reciprocity. Your knowledge is your currency — no subscriptions, no paywalls.
+            </p>
+          </motion.div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 24 }}>
+            {[
+              {
+                name: 'Community',
+                price: 'Free',
+                sub: 'Always free, forever',
+                color: O.primary,
+                features: [
+                  'Unlimited skill swaps',
+                  'Real-time messaging',
+                  'Community rooms',
+                  'XP & leaderboard',
+                  'Session scheduling',
+                  'Peer reviews & ratings',
+                ],
+                cta: 'Get Started Free',
+                highlight: false,
+              },
+              {
+                name: 'Mentor',
+                price: 'Free',
+                sub: 'Earn through teaching',
+                color: O.secondary,
+                features: [
+                  'Everything in Community',
+                  'Verified Mentor badge',
+                  'Priority discovery ranking',
+                  'Advanced analytics',
+                  'Custom session pricing',
+                  'Group session hosting',
+                ],
+                cta: 'Become a Mentor',
+                highlight: true,
+              },
+              {
+                name: 'Institution',
+                price: 'Contact us',
+                sub: 'For schools & orgs',
+                color: '#8B7355',
+                features: [
+                  'Everything in Mentor',
+                  'Custom branding',
+                  'Admin dashboard',
+                  'SSO / SAML auth',
+                  'Bulk user management',
+                  'Priority support',
+                ],
+                cta: 'Contact Sales',
+                highlight: false,
+              },
+            ].map((plan, i) => (
+              <motion.div
+                key={plan.name}
+                style={{
+                  background: plan.highlight ? O.primary : O.card,
+                  border: `2px solid ${plan.highlight ? O.primary : O.border + '80'}`,
+                  borderRadius: '2.5rem',
+                  padding: '36px 32px',
+                  position: 'relative',
+                  boxShadow: plan.highlight ? '0 20px 50px -12px rgba(93,112,82,0.35)' : shadowSoft,
+                }}
+                initial={{ opacity: 0, y: 28 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ delay: i * 0.1 }}
+                whileHover={{ y: -6 }}
+              >
+                {plan.highlight && (
+                  <div
+                    style={{
+                      position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)',
+                      background: O.secondary, color: '#fff',
+                      padding: '4px 20px', borderRadius: 9999,
+                      fontSize: 11, fontWeight: 800, letterSpacing: '0.08em',
+                      textTransform: 'uppercase', whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Most Popular
+                  </div>
+                )}
+                <p
+                  style={{
+                    fontFamily: fontHeading, fontWeight: 700, fontSize: 18,
+                    color: plan.highlight ? O.primaryFg : O.fg, marginBottom: 4,
+                  }}
+                >
+                  {plan.name}
+                </p>
+                <p
+                  style={{
+                    fontFamily: fontHeading, fontWeight: 800,
+                    fontSize: 'clamp(2rem,4vw,2.8rem)',
+                    color: plan.highlight ? '#fff' : plan.color, lineHeight: 1.1,
+                  }}
+                >
+                  {plan.price}
+                </p>
+                <p style={{ fontSize: 13, color: plan.highlight ? `${O.primaryFg}99` : O.mutedFg, marginBottom: 28 }}>
+                  {plan.sub}
+                </p>
+                <div style={{ borderTop: `1px solid ${plan.highlight ? 'rgba(255,255,255,0.2)' : O.border + '60'}`, paddingTop: 24, marginBottom: 28 }}>
+                  {plan.features.map((feat) => (
+                    <div key={feat} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <div
+                        style={{
+                          width: 18, height: 18, borderRadius: 9999, flexShrink: 0,
+                          background: plan.highlight ? 'rgba(255,255,255,0.25)' : `${plan.color}18`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <CheckCircle2 size={11} color={plan.highlight ? '#fff' : plan.color} />
+                      </div>
+                      <span style={{ fontSize: 14, color: plan.highlight ? `${O.primaryFg}dd` : O.mutedFg }}>
+                        {feat}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <motion.button
+                  onClick={onGetStarted}
+                  style={{
+                    width: '100%',
+                    background: plan.highlight ? O.primaryFg : plan.color,
+                    color: plan.highlight ? O.primary : '#fff',
+                    border: 'none', borderRadius: 9999,
+                    padding: '14px 24px', fontSize: 14, fontWeight: 800,
+                    cursor: 'pointer', fontFamily: fontBody,
+                  }}
+                  whileHover={{ scale: 1.04 }}
+                  whileTap={{ scale: 0.96 }}
+                >
+                  {plan.cta}
+                </motion.button>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── CTA ── (moss green background) */}
       <section style={{ padding: 'clamp(64px,10vw,120px) clamp(20px,5vw,80px)' }}>
         <motion.div
